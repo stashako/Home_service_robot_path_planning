@@ -1,19 +1,20 @@
 #include <ros/ros.h>
 #include <visualization_msgs/Marker.h>
-#include <nav_msgs/Odometry.h>
+#include "geometry_msgs/PoseWithCovarianceStamped.h"
 #include <math.h>
 
-float x;
-float y;
+double x;
+double y;
 int state; // 0:pickup  1:moving   2:dropoff
 float dis;
 
-void odomCallback(const nav_msgs::OdometryConstPtr& odomMsgs)
-{
-    x = odomMsgs->pose.pose.position.x;
-    y = odomMsgs->pose.pose.position.y;
-}
 
+void poseAMCLCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msgAMCL)
+{
+    x = msgAMCL->pose.pose.position.x;
+    y = msgAMCL->pose.pose.position.y;
+
+}
 
 float distance_points(float x1, float y1, float x2, float y2)
 {
@@ -27,17 +28,19 @@ int main( int argc, char** argv )
   ros::NodeHandle n;
   ros::Rate r(1);
   ros::Publisher marker_pub = n.advertise<visualization_msgs::Marker>("visualization_marker", 1);
-  ros::Subscriber odom_sub = n.subscribe("odom", 10,odomCallback);
+
+  ros::Subscriber amcl_sub = n.subscribe("amcl_pose",100,poseAMCLCallback);
   visualization_msgs::Marker marker;
   uint32_t shape = visualization_msgs::Marker::CUBE;
 
-  float pickupX = 0;
-  float pickupY = -2;
 
-  float dropoffX = -2; 
-  float dropoffY = 2;
+  float pickupXmarker = 0;
+  float pickupYmarker = -2;
 
-  float distance;
+  float dropoffXmarker = 0; 
+  float dropoffYmarker = 0;
+
+  float dis;
 
   state = 0; //pickup
 
@@ -52,8 +55,8 @@ int main( int argc, char** argv )
     marker.action = visualization_msgs::Marker::ADD;
 
     if(state == 0){
-    marker.pose.position.x = pickupX;
-    marker.pose.position.y = pickupY;
+    marker.pose.position.x = pickupXmarker;
+    marker.pose.position.y = pickupYmarker;
 
     marker.pose.position.z = 0;
     marker.pose.orientation.x = 0.0;
@@ -72,30 +75,35 @@ int main( int argc, char** argv )
     marker.color.b = 1.0f;
     marker.color.a = 1.0;
 
-    dis = distance_points(x, y, pickupX, pickupY);
+    dis = distance_points(x, y, pickupXmarker, pickupYmarker);
+    //ROS_INFO("%f , %f", x, y);
 
-      if(dis <0.1)
+      if(dis <0.3)
       {
          state = 1;
-         ROS_INFO("pickup point");
+         ROS_INFO("pickup point"); 
       }
       marker_pub.publish(marker);
       marker.lifetime = ros::Duration();
     } 
     else if(state == 1)
     {
-      dis = distance_points(x, y, dropoffX, dropoffY);
+      dis = distance_points(x, y, dropoffXmarker, dropoffYmarker);
       marker.action = visualization_msgs::Marker::DELETE;
       marker_pub.publish(marker);
       marker.lifetime = ros::Duration();
+      //ROS_INFO("%f",dis);
 
-      if(dis < 0.2)
+      if(dis < 0.3)
+      {
         state = 2;
+        ROS_INFO("dropoff point");
+      }
     }
     else 
     {
-      marker.pose.position.x = dropoffX;
-      marker.pose.position.y = dropoffY;
+      marker.pose.position.x = dropoffXmarker;
+      marker.pose.position.y = dropoffYmarker;
     
       marker.pose.position.z = 0;
       marker.pose.orientation.x = 0.0;
